@@ -136,9 +136,16 @@ class ThreadSafeRingBuffer {
     /**
      * Resets the write_idx to an initial value.
      * @remarks Should be mostly used by tests to allow reading of the final
-     * item left in the buffer.
+     * item left in the buffer or restarting the test scenario.
      */
     void reset_write_idx() { write_idx = SIZE_MAX; }
+
+    /**
+     * Resets the read_idx to an initial value.
+     * @remarks Should be mostly used by tests to allow restarting the test
+     * scenario.
+     */
+    void reset_read_idx() { read_idx = SIZE_MAX; }
 
    private:
      /**
