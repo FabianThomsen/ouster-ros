@@ -193,6 +193,11 @@ class OusterSensor : public OusterSensorNodeBase {
     // TODO: add as a ros parameter
     const int max_read_imu_packet_errors = 60;
     int read_imu_packet_errors = 0;
+
+    uint16_t lastFrameID = -1;
+    uint16_t lastMeasID = -1;
+    std::chrono::time_point<std::chrono::high_resolution_clock> lastTimeStamp = std::chrono::high_resolution_clock::now();
+    std::atomic_uint64_t writeCounter = {0}, readCounter = {0};
 };
 
 }  // namespace ouster_ros

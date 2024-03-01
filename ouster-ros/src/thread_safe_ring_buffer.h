@@ -132,6 +132,9 @@ class ThreadSafeRingBuffer {
         if (!empty()) perform_read(buffer_read);
     }
 
+    size_t read_index() { return read_idx.load(); }
+    size_t write_index() { return write_idx.load(); }
+
   protected:
     /**
      * Resets the write_idx to an initial value.
