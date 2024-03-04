@@ -61,9 +61,9 @@ class OusterSensor : public OusterSensorNodeBase {
 
     virtual void create_publishers();
 
-    virtual void on_lidar_packet_msg(const uint8_t* raw_lidar_packet);
+    virtual void process_lidar_packet();
 
-    virtual void on_imu_packet_msg(const uint8_t* raw_imu_packet);
+    virtual void process_imu_packet();
 
     virtual void cleanup();
 
@@ -140,6 +140,14 @@ class OusterSensor : public OusterSensorNodeBase {
     void start_packet_processing_threads();
 
     void stop_packet_processing_threads();
+
+    void on_lidar_packet_msg(const uint8_t* raw_lidar_packet);
+
+    void on_imu_packet_msg(const uint8_t* raw_imu_packet);
+
+   protected:
+    ouster_sensor_msgs::msg::PacketMsg lidar_packet;
+    ouster_sensor_msgs::msg::PacketMsg imu_packet;
 
    private:
     std::string sensor_hostname;
