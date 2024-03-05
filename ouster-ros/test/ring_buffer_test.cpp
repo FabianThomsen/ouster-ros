@@ -51,10 +51,6 @@ class ThreadSafeRingBufferTest : public ::testing::Test {
 
     void reset_reading() { buffer->reset_read_idx(); }
 
-    [[nodiscard]] uint32_t max_dropped_reads() const {
-      return buffer->get_max_allowed_read_drops();
-    }
-
     std::unique_ptr<ThreadSafeRingBuffer> buffer;
 };
 
@@ -631,112 +627,6 @@ TEST_F(ThreadSafeRingBufferTest, ReadWriteToBufferNonblockingThrottling) {
   // Since the producer finished with writes faster that the consumer
   // could read them out, some final items should stay empty.
   for (int i = consecutive_reads + saturated_reads + 1; i < TOTAL_ITEMS; ++i) {
-    std::cout << "source " << source[i] << ", target " << target[i] << std::endl;
-    EXPECT_EQ(target[i], "0000");
-  }
-
-  EXPECT_TRUE(buffer->empty());
-  EXPECT_FALSE(buffer->full());
-}
-
-TEST_F(ThreadSafeRingBufferTest, GracefulReadingBlockingWithTimeout) {
-
-  static constexpr int TOTAL_ITEMS = 10; // total items to process
-  const std::vector<std::string> source = rand_vector_str(TOTAL_ITEMS, ITEM_SIZE);
-  std::vector<std::string> target = known_vector_str(TOTAL_ITEMS, "0000");
-
-  EXPECT_TRUE(buffer->empty());
-  EXPECT_FALSE(buffer->full());
-
-  std::thread producer([this, &source]() {
-    for (int i = 0; i < TOTAL_ITEMS; ++i) {
-      buffer->write_nonblock([i, &source](uint8_t* buffer){
-        std::memcpy(buffer, &source[i][0], ITEM_SIZE);
-      });
-    }
-
-    //We're not resetting the writing index on purpose.
-  });
-
-  // wait for 1 second before starting the consumer thread
-  // allowing sufficient time for the producer thread to be
-  // completely done
-  std::this_thread::sleep_for(1s);
-  std::thread consumer([this, &target]() {
-    unsigned idx = 0;
-    for (unsigned i = 0; i < ITEM_COUNT + max_dropped_reads(); ++i) {
-      buffer->read_timeout([&idx, &target](uint8_t* buffer){
-        std::memcpy(&target[idx++][0], buffer, ITEM_SIZE);
-      }, 1s);
-    }
-  });
-
-  producer.join();
-  consumer.join();
-
-  // The final writing index remained at ITEM_COUNT - 1, so the consumer will
-  // keep dropping reads until it reaches the maximum dropping threshold, and
-  // the final item will eventually be filled.
-  for (int i = 0; i < ITEM_COUNT; ++i) {
-    std::cout << "source " << source[i] << ", target " << target[i] << std::endl;
-    EXPECT_EQ(target[i], source[i]);
-  }
-  // Since the buffer can only hold upto ITEM_COUNT items, the buffer is completely
-  // read out. The remaining target items should be empty.
-  for (int i = ITEM_COUNT + 1; i < TOTAL_ITEMS; ++i) {
-    std::cout << "source " << source[i] << ", target " << target[i] << std::endl;
-    EXPECT_EQ(target[i], "0000");
-  }
-
-  EXPECT_TRUE(buffer->empty());
-  EXPECT_FALSE(buffer->full());
-}
-
-TEST_F(ThreadSafeRingBufferTest, GracefulReadingNonblocking) {
-
-  static constexpr int TOTAL_ITEMS = 10; // total items to process
-  const std::vector<std::string> source = rand_vector_str(TOTAL_ITEMS, ITEM_SIZE);
-  std::vector<std::string> target = known_vector_str(TOTAL_ITEMS, "0000");
-
-  EXPECT_TRUE(buffer->empty());
-  EXPECT_FALSE(buffer->full());
-
-  std::thread producer([this, &source]() {
-    for (int i = 0; i < TOTAL_ITEMS; ++i) {
-      buffer->write_nonblock([i, &source](uint8_t* buffer){
-        std::memcpy(buffer, &source[i][0], ITEM_SIZE);
-      });
-    }
-
-    //We're not resetting the writing index on purpose.
-  });
-
-  // wait for 1 second before starting the consumer thread
-  // allowing sufficient time for the producer thread to be
-  // completely done
-  std::this_thread::sleep_for(1s);
-  std::thread consumer([this, &target]() {
-    unsigned idx = 0;
-    for (unsigned i = 0; i < ITEM_COUNT + max_dropped_reads(); ++i) {
-      buffer->read_nonblock([&idx, &target](uint8_t* buffer){
-        std::memcpy(&target[idx++][0], buffer, ITEM_SIZE);
-      });
-    }
-  });
-
-  producer.join();
-  consumer.join();
-
-  // The final writing index remained at ITEM_COUNT - 1, so the consumer will
-  // keep dropping reads until it reaches the maximum dropping threshold, and
-  // the final item will eventually be filled.
-  for (int i = 0; i < ITEM_COUNT; ++i) {
-    std::cout << "source " << source[i] << ", target " << target[i] << std::endl;
-    EXPECT_EQ(target[i], source[i]);
-  }
-  // Since the buffer can only hold upto ITEM_COUNT items, the buffer is completely
-  // read out. The remaining target items should be empty.
-  for (int i = ITEM_COUNT + 1; i < TOTAL_ITEMS; ++i) {
     std::cout << "source " << source[i] << ", target " << target[i] << std::endl;
     EXPECT_EQ(target[i], "0000");
   }
