@@ -26,6 +26,7 @@ class ThreadSafeRingBuffer {
           write_idx(SIZE_MAX),
           read_idx(SIZE_MAX),
           dropped_reads(0),
+          should_always_drop_reads(true),
           new_data_lock(mutex, std::defer_lock),
           free_space_lock(mutex, std::defer_lock) {}
 
@@ -71,6 +72,7 @@ class ThreadSafeRingBuffer {
      */
     template <class BufferWriteFn>
     void write(BufferWriteFn&& buffer_write) {
+        should_always_drop_reads = false;
         free_space_lock.lock();
         free_space_condition.wait(free_space_lock, [this] { return !full(); });
         free_space_lock.unlock();
@@ -83,6 +85,7 @@ class ThreadSafeRingBuffer {
      */
     template <class BufferWriteFn>
     void write_overwrite(BufferWriteFn&& buffer_write) {
+        should_always_drop_reads = true;
         perform_write(buffer_write);
     }
 
@@ -92,6 +95,7 @@ class ThreadSafeRingBuffer {
      */
     template <class BufferWriteFn>
     void write_nonblock(BufferWriteFn&& buffer_write) {
+        should_always_drop_reads = false;
         if (!full()) perform_write(buffer_write);
     }
 
@@ -155,8 +159,8 @@ class ThreadSafeRingBuffer {
      * @remarks
      *  Should be mostly used by tests.
      */
-    static constexpr uint8_t get_max_allowed_read_drops() {
-      return max_allowed_read_drops;
+    static constexpr uint32_t get_max_allowed_read_drops() {
+      return MAX_ALLOWED_READ_DROPS;
     }
 
    private:
@@ -177,15 +181,16 @@ class ThreadSafeRingBuffer {
       * @tparam BufferReadFn
       * @param buffer_read
       * @remarks
-      *  If this function attempts to read using an index currently hold by the
-      *  writer, it will not perform the operations. However, it will not drop more
-      *  than the max_allowed_read_drops, after which a single read is performed
-      *  regardless.
+      *  If this function attempts to read using an index currently held by the
+      *  writer, it will not perform the operations. However, if allowed, it will
+      *  not keep dropping more than the MAX_ALLOWED_READ_DROPS, after which a
+      *  single read is performed regardless.
       */
      template <typename BufferReadFn>
      void perform_read(BufferReadFn&& buffer_read) {
        if ((incremented_with_capacity(read_idx.load()) == write_idx.load())
-           && (dropped_reads.load() < max_allowed_read_drops)) {
+           && (should_always_drop_reads.load() ||
+               (dropped_reads.load() < MAX_ALLOWED_READ_DROPS))) {
          ++dropped_reads;
          return;
        }
@@ -235,16 +240,19 @@ class ThreadSafeRingBuffer {
           static_cast<int>(active_items_count.load() - 1), 0));
     }
 
+    static constexpr uint32_t MAX_ALLOWED_READ_DROPS = UINT16_MAX * 6;
+
     std::vector<uint8_t> buffer;
 
     const size_t item_size;
     const size_t max_items_count;
-    static constexpr uint8_t max_allowed_read_drops = 3;
 
     std::atomic_size_t active_items_count;
     std::atomic_size_t write_idx;
     std::atomic_size_t read_idx;
-    std::atomic_uint8_t dropped_reads;
+
+    std::atomic_uint32_t dropped_reads;
+    std::atomic_bool should_always_drop_reads;
 
     std::mutex mutex;
     std::condition_variable new_data_condition;

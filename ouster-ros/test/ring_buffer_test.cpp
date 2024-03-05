@@ -51,7 +51,7 @@ class ThreadSafeRingBufferTest : public ::testing::Test {
 
     void reset_reading() { buffer->reset_read_idx(); }
 
-    [[nodiscard]] uint8_t max_dropped_reads() const {
+    [[nodiscard]] uint32_t max_dropped_reads() const {
       return buffer->get_max_allowed_read_drops();
     }
 
@@ -639,12 +639,11 @@ TEST_F(ThreadSafeRingBufferTest, ReadWriteToBufferNonblockingThrottling) {
   EXPECT_FALSE(buffer->full());
 }
 
-TEST_F(ThreadSafeRingBufferTest, GracefulReadingBlocking) {
+TEST_F(ThreadSafeRingBufferTest, GracefulReadingBlockingWithTimeout) {
 
   static constexpr int TOTAL_ITEMS = 10; // total items to process
   const std::vector<std::string> source = rand_vector_str(TOTAL_ITEMS, ITEM_SIZE);
   std::vector<std::string> target = known_vector_str(TOTAL_ITEMS, "0000");
-  const int final_read = ITEM_COUNT - 1 + max_dropped_reads();
 
   EXPECT_TRUE(buffer->empty());
   EXPECT_FALSE(buffer->full());
@@ -664,9 +663,10 @@ TEST_F(ThreadSafeRingBufferTest, GracefulReadingBlocking) {
   // completely done
   std::this_thread::sleep_for(1s);
   std::thread consumer([this, &target]() {
-    for (int i = 0; i < TOTAL_ITEMS; ++i) {
-      buffer->read_timeout([i, &target](uint8_t* buffer){
-        std::memcpy(&target[i][0], buffer, ITEM_SIZE);
+    unsigned idx = 0;
+    for (unsigned i = 0; i < ITEM_COUNT + max_dropped_reads(); ++i) {
+      buffer->read_timeout([&idx, &target](uint8_t* buffer){
+        std::memcpy(&target[idx++][0], buffer, ITEM_SIZE);
       }, 1s);
     }
   });
@@ -674,22 +674,16 @@ TEST_F(ThreadSafeRingBufferTest, GracefulReadingBlocking) {
   producer.join();
   consumer.join();
 
-  // The final writing index remained at ITEM_COUNT - 1, so the consumer will only
-  // read out the first items upto ITEM_COUNT - 1.
-  for (int i = 0; i < ITEM_COUNT - 1; ++i) {
+  // The final writing index remained at ITEM_COUNT - 1, so the consumer will
+  // keep dropping reads until it reaches the maximum dropping threshold, and
+  // the final item will eventually be filled.
+  for (int i = 0; i < ITEM_COUNT; ++i) {
     std::cout << "source " << source[i] << ", target " << target[i] << std::endl;
     EXPECT_EQ(target[i], source[i]);
   }
-  // The consumer should not keep dropping reads indefinitely if the buffer is full,
-  // and will perform the final read after a number of drops.
-  for (int i = ITEM_COUNT - 1; i < final_read; ++i) {
-    std::cout << "source " << source[i] << ", target " << target[i] << std::endl;
-  }
-  std::cout << "source " << source[final_read] << ", target " << target[final_read] << std::endl;
-  EXPECT_EQ(target[final_read], source[ITEM_COUNT - 1]);
-  // Since the buffer is completely read out after the final read, the remaining
-  // target items should be empty.
-  for (int i = final_read + 1; i < TOTAL_ITEMS; ++i) {
+  // Since the buffer can only hold upto ITEM_COUNT items, the buffer is completely
+  // read out. The remaining target items should be empty.
+  for (int i = ITEM_COUNT + 1; i < TOTAL_ITEMS; ++i) {
     std::cout << "source " << source[i] << ", target " << target[i] << std::endl;
     EXPECT_EQ(target[i], "0000");
   }
@@ -703,7 +697,6 @@ TEST_F(ThreadSafeRingBufferTest, GracefulReadingNonblocking) {
   static constexpr int TOTAL_ITEMS = 10; // total items to process
   const std::vector<std::string> source = rand_vector_str(TOTAL_ITEMS, ITEM_SIZE);
   std::vector<std::string> target = known_vector_str(TOTAL_ITEMS, "0000");
-  const int final_read = ITEM_COUNT - 1 + max_dropped_reads();
 
   EXPECT_TRUE(buffer->empty());
   EXPECT_FALSE(buffer->full());
@@ -723,9 +716,10 @@ TEST_F(ThreadSafeRingBufferTest, GracefulReadingNonblocking) {
   // completely done
   std::this_thread::sleep_for(1s);
   std::thread consumer([this, &target]() {
-    for (int i = 0; i < TOTAL_ITEMS; ++i) {
-      buffer->read_nonblock([i, &target](uint8_t* buffer){
-        std::memcpy(&target[i][0], buffer, ITEM_SIZE);
+    unsigned idx = 0;
+    for (unsigned i = 0; i < ITEM_COUNT + max_dropped_reads(); ++i) {
+      buffer->read_nonblock([&idx, &target](uint8_t* buffer){
+        std::memcpy(&target[idx++][0], buffer, ITEM_SIZE);
       });
     }
   });
@@ -733,22 +727,16 @@ TEST_F(ThreadSafeRingBufferTest, GracefulReadingNonblocking) {
   producer.join();
   consumer.join();
 
-  // The final writing index remained at ITEM_COUNT - 1, so the consumer will only
-  // read out the first items upto ITEM_COUNT - 1.
-  for (int i = 0; i < ITEM_COUNT - 1; ++i) {
+  // The final writing index remained at ITEM_COUNT - 1, so the consumer will
+  // keep dropping reads until it reaches the maximum dropping threshold, and
+  // the final item will eventually be filled.
+  for (int i = 0; i < ITEM_COUNT; ++i) {
     std::cout << "source " << source[i] << ", target " << target[i] << std::endl;
     EXPECT_EQ(target[i], source[i]);
   }
-  // The consumer should not keep dropping reads indefinitely if the buffer is full,
-  // and will perform the final read after a number of drops.
-  for (int i = ITEM_COUNT - 1; i < final_read; ++i) {
-    std::cout << "source " << source[i] << ", target " << target[i] << std::endl;
-  }
-  std::cout << "source " << source[final_read] << ", target " << target[final_read] << std::endl;
-  EXPECT_EQ(target[final_read], source[ITEM_COUNT - 1]);
-  // Since the buffer is completely read out after the final read, the remaining
-  // target items should be empty.
-  for (int i = final_read + 1; i < TOTAL_ITEMS; ++i) {
+  // Since the buffer can only hold upto ITEM_COUNT items, the buffer is completely
+  // read out. The remaining target items should be empty.
+  for (int i = ITEM_COUNT + 1; i < TOTAL_ITEMS; ++i) {
     std::cout << "source " << source[i] << ", target " << target[i] << std::endl;
     EXPECT_EQ(target[i], "0000");
   }
