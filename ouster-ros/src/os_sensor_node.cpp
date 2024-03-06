@@ -733,15 +733,15 @@ void OusterSensor::handle_lidar_packet(sensor::client& cli,
         writeCounter.compare_exchange_strong(counterMax, 0);
         const auto timeStamp = std::chrono::high_resolution_clock::now();
         const auto timeDiff = (timeStamp - lastTimeStamp).count();
-        const auto echoStamp = timeStamp.time_since_epoch().count();
-        if (!success) std::cout << "[" << echoStamp << "] ERROR reading lidar packet! (time diff: " << std::setw(10) << timeDiff << std::setw(0) << " ns)" << std::endl;
+        const auto epochStamp = timeStamp.time_since_epoch().count();
+        if (!success) std::cout << "[" << epochStamp << "] ERROR reading lidar packet! (time diff: " << std::setw(10) << timeDiff << std::setw(0) << " ns)" << std::endl;
         const uint16_t f_id = pf.frame_id(buffer);
         const uint16_t fIDDiff = f_id - lastFrameID;
         if (fIDDiff > 1) {
           const uint64_t counterDiff = writeCounter.load() - readCounter.load();
-          std::cout << "[" << echoStamp << "] missing " << (fIDDiff - 1) << " whole frames (last f_id: " << lastFrameID << ", new f_id: " << f_id << ", time diff: " << std::setw(10) << timeDiff << std::setw(0) << " ns)" << std::endl;
-          std::cout << "unprocessed packets: " << counterDiff << " (written: " << writeCounter.load() << ", read: " << readCounter.load() << ")" << std::endl;
-          std::cout << "buffer active items: " << lidar_packets->size() << std::endl;
+          std::cout << "[" << epochStamp << "] missing " << (fIDDiff - 1) << " whole frames (last f_id: " << lastFrameID << ", new f_id: " << f_id << ", time diff: " << std::setw(10) << timeDiff << std::setw(0) << " ns)" << std::endl;
+//          std::cout << "unprocessed packets: " << counterDiff << " (written: " << writeCounter.load() << ", read: " << readCounter.load() << ")" << std::endl;
+//          std::cout << "buffer active items: " << lidar_packets->size() << std::endl;
         }
         for (int icol = 0; icol < pf.columns_per_packet; icol++) {
           const uint8_t* col_buf = pf.nth_col(icol, buffer);
@@ -750,15 +750,15 @@ void OusterSensor::handle_lidar_packet(sensor::client& cli,
             const uint16_t mIDDiff = m_id - lastMeasID;
             if (mIDDiff > 1) {
               const uint64_t counterDiff = writeCounter.load() - readCounter.load();
-              std::cout << "[" << echoStamp << "] missing " << (mIDDiff + 1) / 16 << " packets (last m_id: " << lastMeasID << ", new m_id: " << m_id << ", time diff: " << std::setw(10) << timeDiff << std::setw(0) << " ns)" << std::endl;
-              std::cout << "unprocessed packets: " << counterDiff << " (written: " << writeCounter.load() << ", read: " << readCounter.load() << ")" << std::endl;
-              std::cout << "buffer active items: " << lidar_packets->size() << std::endl;
+              std::cout << "[" << epochStamp << "] missing " << (mIDDiff + 1) / 16 << " packets (last m_id: " << lastMeasID << ", new m_id: " << m_id << ", time diff: " << std::setw(10) << timeDiff << std::setw(0) << " ns)" << std::endl;
+//              std::cout << "unprocessed packets: " << counterDiff << " (written: " << writeCounter.load() << ", read: " << readCounter.load() << ")" << std::endl;
+//              std::cout << "buffer active items: " << lidar_packets->size() << std::endl;
             }
             if (mIDDiff < 1) {
               const uint64_t counterDiff = writeCounter.load() - readCounter.load();
-              std::cout << "[" << echoStamp << "] got the same packet again, (last m_id: " << lastMeasID << ", new m_id: " << m_id << ", time diff: " << std::setw(10) << timeDiff << std::setw(0) << " ns)" << std::endl;
-              std::cout << "unprocessed packets: " << counterDiff << " (written: " << writeCounter.load() << ", read: " << readCounter.load() << ")" << std::endl;
-              std::cout << "buffer active items: " << lidar_packets->size() << std::endl;
+              std::cout << "[" << epochStamp << "] got the same packet again, (last m_id: " << lastMeasID << ", new m_id: " << m_id << ", time diff: " << std::setw(10) << timeDiff << std::setw(0) << " ns)" << std::endl;
+//              std::cout << "unprocessed packets: " << counterDiff << " (written: " << writeCounter.load() << ", read: " << readCounter.load() << ")" << std::endl;
+//              std::cout << "buffer active items: " << lidar_packets->size() << std::endl;
             }
           }
           lastMeasID = m_id;
@@ -768,9 +768,9 @@ void OusterSensor::handle_lidar_packet(sensor::client& cli,
         //        std::cout << "time diff: " << std::setw(10) << timeDiff << std::setw(0) << " ns" << std::endl;
     });
 
-    if (lidar_packets->read_index() == lidar_packets->write_index())
-      std::cout << "indexes match (ridx: " << lidar_packets->read_index() << ", widx: " << lidar_packets->write_index()
-                << ", full: " << lidar_packets->full() << ", size: " << lidar_packets->size() << ")" << std::endl;
+//    if (lidar_packets->read_index() == lidar_packets->write_index())
+//      std::cout << "indexes match (ridx: " << lidar_packets->read_index() << ", widx: " << lidar_packets->write_index()
+//                << ", full: " << lidar_packets->full() << ", size: " << lidar_packets->size() << ")" << std::endl;
 }
 
 void OusterSensor::handle_imu_packet(sensor::client& cli,
@@ -860,13 +860,13 @@ void OusterSensor::start_packet_processing_threads() {
                 ++readCounter;
                 uint64_t counterMax = UINT64_MAX;
                 readCounter.compare_exchange_strong(counterMax, 0);
-//                const uint64_t counterDiff = writeCounter.load() - readCounter.load();
-                //NOTE: delayed cloud after overflow recovery is caused by these prints, NOT A MISTAKE !!!
-//                if ((counterDiff > 0) && ((std::chrono::high_resolution_clock::now() - printed) > std::chrono::milliseconds(20))) {
-//                  std::cout << "unprocessed packets: " << counterDiff << " (written: " << writeCounter.load() << ", read: " << readCounter.load() << ")" << std::endl;
-//                  std::cout << "buffer active items: " << lidar_packets->size() << std::endl;
-//                  printed = std::chrono::high_resolution_clock::now();
-//                }
+                const uint64_t counterDiff = writeCounter.load() - readCounter.load();
+                if ((counterDiff > 0) && ((std::chrono::high_resolution_clock::now() - printed) > std::chrono::milliseconds(20))) {
+                  std::cout << "unprocessed packets: " << counterDiff << " (written: " << writeCounter.load() << ", read: " << readCounter.load() << ")" << std::endl;
+                  std::cout << "buffer active items: " << lidar_packets->size() << " (ridx: " << lidar_packets->read_index() << ", widx: " << lidar_packets->write_index()
+                            << ", full: " << lidar_packets->full() << ", empty: " << lidar_packets->empty() << ")" << std::endl;
+                  printed = std::chrono::high_resolution_clock::now();
+                }
 
                 on_lidar_packet_msg(buffer);
             });
