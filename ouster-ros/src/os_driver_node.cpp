@@ -51,6 +51,8 @@ class OusterDriver : public OusterSensor {
         declare_parameter("v_reduction", 1);
         declare_parameter("min_scan_valid_columns_ratio", 0.0);
         declare_parameter("mask_path", "");
+        RCLCPP_INFO_STREAM(this->get_logger(),
+                     "[RITACoopPerception] Ouster - Startup of node - timestamp: " << this->now().nanoseconds());
     }
 
     ~OusterDriver() override {
@@ -147,6 +149,9 @@ class OusterDriver : public OusterSensor {
                     [this](PointCloudProcessor_OutputType msgs) {
                         for (size_t i = 0; i < msgs.size(); ++i)
                             lidar_pubs[i]->publish(*msgs[i]);
+                            RCLCPP_INFO_STREAM(this->get_logger(),
+                            "[RITACoopPerception] Ouster - PCL publish - timestamp: " << this->now().nanoseconds());
+
                     }
                 )
             );
