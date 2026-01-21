@@ -149,9 +149,12 @@ class OusterDriver : public OusterSensor {
                     [this](PointCloudProcessor_OutputType msgs) {
                         for (size_t i = 0; i < msgs.size(); ++i)
                             lidar_pubs[i]->publish(*msgs[i]);
-                            RCLCPP_INFO_STREAM(this->get_logger(),
-                            "[RITACoopPerception] Ouster - PCL publish - timestamp: " << this->now().nanoseconds());
-
+                            static size_t counter {0};
+                            if (counter < 100){
+                              RCLCPP_INFO_STREAM(this->get_logger(),
+                                "[RITACoopPerception] Ouster - PCL publish - timestamp: " << this->now().nanoseconds());
+                              ++counter;
+                            )
                     }
                 )
             );
