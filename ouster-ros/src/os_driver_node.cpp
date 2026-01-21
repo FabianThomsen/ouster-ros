@@ -154,7 +154,7 @@ class OusterDriver : public OusterSensor {
                               RCLCPP_INFO_STREAM(this->get_logger(),
                                 "[RITACoopPerception] Ouster - PCL publish - timestamp: " << this->now().nanoseconds());
                               ++counter;
-                            )
+                            }
                     }
                 )
             );
